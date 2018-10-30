@@ -244,7 +244,7 @@ def calculate_buffer_per_auto_scaling_group(autoscaling, nodes_by_asg_zone: dict
     if len(groups) > 0:
         response = autoscaling.describe_auto_scaling_groups(AutoScalingGroupNames=groups)
         for asg in response['AutoScalingGroups']:
-            if len(asg['Tags']) > 0:
+            if 'Tags' in asg.keys() and len(asg['Tags']) > 0:
                 buffer_info = {}
                 for asg_tag in asg['Tags']:
                     tag_key = asg_tag['Key']
