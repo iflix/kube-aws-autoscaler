@@ -1,0 +1,18 @@
+{
+  "setup": { "prepend": false },
+  "agent": "elastic",
+  "steps": [
+    {
+      "name": "docker_build",
+      "image": "kube-aws-autoscaler",
+      "tag": "0.13.1",
+      "dockerfile": "Dockerfile"
+    },
+    {
+      "name": "docker_push",
+      "image": "kube-aws-autoscaler",
+      "tag": "0.13.1",
+      "dockerfile": "Dockerfile"
+    }
+  ]
+}

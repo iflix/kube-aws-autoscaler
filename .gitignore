@@ -11,3 +11,4 @@ scm-source.json
 *.bak
 htmlcov/
 venv/
+.idea/
