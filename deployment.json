@@ -1,5 +1,10 @@
 {
-  "setup": { "prepend": false },
+  "setup": {
+    "prepend": true,
+    "python": {
+      "version": "v3.7"
+    }
+  },
   "agent": "elastic",
   "steps": [
     {
