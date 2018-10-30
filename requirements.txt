@@ -1,3 +1,4 @@
 boto3
 pykube
 flask
+pytest
