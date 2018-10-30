@@ -287,7 +287,7 @@ def test_get_nodes(monkeypatch):
         'beta.kubernetes.io/instance-type': 'x1.mega'
     }
     node.obj = {
-        'status': {'allocatable': {'cpu': '2', 'memory': '16Gi', 'pods': '10'}},
+        'status': {'allocatable': {'cpu': '2', 'memory': '16Gi', 'pods': '10'}, 'nodeInfo': {'kubeletVersion': '1.9'}},
         'spec': {'externalID': 'i-123'}
     }
 
@@ -300,7 +300,7 @@ def test_get_nodes(monkeypatch):
         'master': 'true'
     }
     master.obj = {
-        'status': {'allocatable': {'cpu': '2', 'memory': '16Gi', 'pods': '10'}},
+        'status': {'allocatable': {'cpu': '2', 'memory': '16Gi', 'pods': '10'}, 'nodeInfo': {'kubeletVersion': '1.9'}},
         'spec': {'externalID': 'i-456'}
     }
 
