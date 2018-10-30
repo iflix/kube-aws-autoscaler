@@ -76,32 +76,32 @@ def test_calculate_usage_by_asg_zone():
 
 
 def test_calculate_required_auto_scaling_group_sizes():
-    assert calculate_required_auto_scaling_group_sizes({}, {}, {}, {}) == {}
+    assert calculate_required_auto_scaling_group_sizes({}, {}, {}, {}, {}) == {}
     node = {'allocatable': {'cpu': 1, 'memory': 1, 'pods': 1}, 'unschedulable': False, 'master': False}
-    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {}, {}, {}) == {'a1': 0}
-    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {('a1', 'z1'): {'cpu': 1, 'memory': 1, 'pods': 1}}, {}, {}) == {'a1': 1}
-    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {('unknown', 'unknown'): {'cpu': 1, 'memory': 1, 'pods': 1}}, {}, {}) == {'a1': 1}
-    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {}, {}, {}, buffer_spare_nodes=2) == {'a1': 2}
+    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {}, {}, {}, {}) == {'a1': 0}
+    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {('a1', 'z1'): {'cpu': 1, 'memory': 1, 'pods': 1}}, {}, {}, {}) == {'a1': 1}
+    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {('unknown', 'unknown'): {'cpu': 1, 'memory': 1, 'pods': 1}}, {}, {}, {}) == {'a1': 1}
+    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {}, {}, {}, {}, buffer_spare_nodes=2) == {'a1': 2}
 
 
 def test_calculate_required_auto_scaling_group_sizes_no_scaledown():
     nodes = [{'allocatable': {'cpu': 1, 'memory': 1, 'pods': 1}, 'unschedulable': False, 'master': False},
              {'allocatable': {'cpu': 1, 'memory': 1, 'pods': 1}, 'unschedulable': False, 'master': False}]
-    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): nodes}, {}, {}, {}) == {'a1': 0}
-    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): nodes}, {}, {}, {}, disable_scale_down=True) == {'a1': 2}
+    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): nodes}, {}, {}, {}, {}) == {'a1': 0}
+    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): nodes}, {}, {}, {}, {}, disable_scale_down=True) == {'a1': 2}
 
 
 def test_calculate_required_auto_scaling_group_sizes_cordon():
     node = {'name': 'mynode', 'allocatable': {'cpu': 1, 'memory': 1, 'pods': 1}, 'unschedulable': True, 'master': False, 'asg_lifecycle_state': 'InService'}
-    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {}, {}, {}) == {'a1': 1}
-    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {('a1', 'z1'): {'cpu': 1, 'memory': 1, 'pods': 1}}, {}, {}) == {'a1': 2}
+    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {}, {}, {}, {}) == {'a1': 1}
+    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {('a1', 'z1'): {'cpu': 1, 'memory': 1, 'pods': 1}}, {}, {}, {}) == {'a1': 2}
 
 
 def test_calculate_required_auto_scaling_group_sizes_unschedulable_terminating():
     node = {'name': 'mynode', 'allocatable': {'cpu': 1, 'memory': 1, 'pods': 1}, 'unschedulable': True, 'master': False, 'asg_lifecycle_state': 'Terminating'}
     # do not compensate if the instance is terminating.. (it will probably be replaced by ASG)
-    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {}, {}, {}) == {'a1': 0}
-    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {('a1', 'z1'): {'cpu': 1, 'memory': 1, 'pods': 1}}, {}, {}) == {'a1': 1}
+    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {}, {}, {}, {}) == {'a1': 0}
+    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {('a1', 'z1'): {'cpu': 1, 'memory': 1, 'pods': 1}}, {}, {}, {}) == {'a1': 1}
 
 
 def test_get_nodes_by_asg_zone():
@@ -151,7 +151,8 @@ def test_resize_auto_scaling_groups_downscale():
             'AutoScalingGroupName': 'asg1',
             'DesiredCapacity': 2,
             'MinSize': 1,
-            'MaxSize': 10
+            'MaxSize': 10,
+            'Tags': []
         }]
     }
     asg_size = {'asg1': 1}
@@ -167,7 +168,8 @@ def test_resize_auto_scaling_groups_nochange():
             'AutoScalingGroupName': 'asg1',
             'DesiredCapacity': 2,
             'MinSize': 1,
-            'MaxSize': 10
+            'MaxSize': 10,
+            'Tags': []
         }]
     }
     asg_size = {'asg1': 2}
