@@ -47,10 +47,10 @@ DESCRIBE_AUTO_SCALING_INSTANCES_LIMIT = 50
 logger = logging.getLogger('autoscaler')
 
 ASG_ALLOWED_TAGS = {
-    'buffer-memory-percentage': 'memory',
-    'buffer-cpu-percentage': 'cpu',
-    'buffer-pods-percentage': 'pods',
-    'buffer-spare-nodes': 'nodes'
+    'kube-aws-autoscaler:buffer-memory-percentage': 'memory',
+    'kube-aws-autoscaler:buffer-cpu-percentage': 'cpu',
+    'kube-aws-autoscaler:buffer-pods-percentage': 'pods',
+    'kube-aws-autoscaler:buffer-spare-nodes': 'nodes'
 }
 
 STATS = {}
