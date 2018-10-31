@@ -256,12 +256,12 @@ def calculate_buffer_per_auto_scaling_group(autoscaling, nodes_by_asg_zone: dict
                     if tag_key in ASG_ALLOWED_TAGS:
                         buffer_info[ASG_ALLOWED_TAGS[tag_key]] = int(asg_tag['Value'])
 
-                if buffer_info.keys():
+                if buffer_info:
                     # Fill the missing buffer resource with global
                     if 'nodes' not in buffer_info.keys():
                         buffer_info['nodes'] = buffer_spare_nodes
                     for buffer_resource in RESOURCES:
-                        if buffer_resource not in buffer_info.keys():
+                        if buffer_resource not in buffer_info:
                             buffer_info[buffer_resource] = buffer_percentage[buffer_resource]
 
                     buffer_per_asg[asg['AutoScalingGroupName']] = buffer_info
