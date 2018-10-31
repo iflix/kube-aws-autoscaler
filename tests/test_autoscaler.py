@@ -784,3 +784,49 @@ def test_calculate_buffer_per_auto_scaling_group_with_multiple_groups_and_partia
         'asg1': {'cpu': 25, 'memory': 25, 'pods': 25, 'nodes': 2},
         'asg2': {'cpu': 20, 'memory': 10, 'pods': 10, 'nodes': 5}
     }
+
+
+def test_calculate_required_auto_scaling_group_sizes_with_asg_overrides_scaleup_no_spare_node():
+    node = {'allocatable': {'cpu': 1, 'memory': 1, 'pods': 1}, 'unschedulable': False, 'master': False}
+    buffer_per_asg = {
+        'asg1': {'cpu': 25, 'memory': 25, 'pods': 10, 'nodes': 0}
+    }
+    result = calculate_required_auto_scaling_group_sizes({('asg1', 'z1'): [node]},
+                                                         {('asg1', 'z1'): {'cpu': 1, 'memory': 1, 'pods': 1}},
+                                                         buffer_per_asg, {}, {})
+    assert result == {'asg1': 2}
+
+
+def test_calculate_required_auto_scaling_group_sizes_with_asg_overrides_scaleup_with_spare_node():
+    node = {'allocatable': {'cpu': 1, 'memory': 1, 'pods': 1}, 'unschedulable': False, 'master': False}
+    buffer_per_asg = {
+        'asg1': {'cpu': 25, 'memory': 25, 'pods': 10, 'nodes': 1}
+    }
+    result = calculate_required_auto_scaling_group_sizes({('asg1', 'z1'): [node]},
+                                                         {('asg1', 'z1'): {'cpu': 1, 'memory': 1, 'pods': 1}},
+                                                         buffer_per_asg, {}, {})
+    assert result == {'asg1': 3}
+
+
+def test_calculate_required_auto_scaling_group_sizes_with_asg_overrides_no_scale():
+    node = {'allocatable': {'cpu': 1, 'memory': 1, 'pods': 10}, 'unschedulable': False, 'master': False}
+    buffer_per_asg = {
+        'asg1': {'cpu': 5, 'memory': 5, 'pods': 10, 'nodes': 0}
+    }
+    result = calculate_required_auto_scaling_group_sizes({('asg1', 'z1'): [node]},
+                                                         {('asg1', 'z1'): {'cpu': 0.5, 'memory': 0.5, 'pods': 1}},
+                                                         buffer_per_asg, {}, {})
+    assert result == {'asg1': 1}
+
+
+def test_calculate_required_auto_scaling_group_sizes_with_asg_overrides_scale_down():
+    node1 = {'allocatable': {'cpu': 1, 'memory': 1, 'pods': 10}, 'unschedulable': False, 'master': False}
+    node2 = {'allocatable': {'cpu': 1, 'memory': 1, 'pods': 10}, 'unschedulable': False, 'master': False}
+    buffer_per_asg = {
+        'asg1': {'cpu': 15, 'memory': 15, 'pods': 10, 'nodes': 0}
+    }
+    result = calculate_required_auto_scaling_group_sizes({('asg1', 'z1'): [node1, node2]},
+                                                         {('asg1', 'z1'): {'cpu': 0.5, 'memory': 0.5, 'pods': 1}},
+                                                         buffer_per_asg, {}, {})
+    assert result == {'asg1': 1}
+
