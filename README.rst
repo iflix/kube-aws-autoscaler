@@ -88,7 +88,8 @@ Configuration
 =============
 There are two types of configuration, i.e. global and per autoscaling group.
 
-### Global
+Global
+--------
 The global configuration overrides the hardcoded defaults and applies to all the worker pools autoscaling groups. The global config parameters
 can be configured as environment variables or passed as argument to the entrypoint. The following command line options are supported:
 
@@ -117,7 +118,8 @@ can be configured as environment variables or passed as argument to the entrypoi
 ``--scale-down-step-percentage``
     Scale down step in terms of node percentage (1.0 is 100%), defaults to 0%
 
-### Per Autoscaling group
+Per Autoscaling group
+--------
 The config params per ASG allows fine-tuning the scaling policy per worker pool. The config params need to be configured as tags to the
 autoscaling group. If the ASG doesn't have the tags, then the autoscaler will use the globally configured params. If the ASG has configured
 only specific parameters, then the rest will be inherited from the global configuration. Following parameters are supposed:
