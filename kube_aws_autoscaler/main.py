@@ -46,7 +46,12 @@ DESCRIBE_AUTO_SCALING_INSTANCES_LIMIT = 50
 
 logger = logging.getLogger('autoscaler')
 
-ASG_ALLOWED_TAGS = {'buffer-memory-percentage': 'memory', 'buffer-cpu-percentage': 'cpu', 'buffer-pods-percentage': 'pods', 'buffer-spare-nodes': 'nodes'}
+ASG_ALLOWED_TAGS = {
+    'buffer-memory-percentage': 'memory',
+    'buffer-cpu-percentage': 'cpu',
+    'buffer-pods-percentage': 'pods',
+    'buffer-spare-nodes': 'nodes'
+}
 
 STATS = {}
 
@@ -244,14 +249,14 @@ def calculate_buffer_per_auto_scaling_group(autoscaling, nodes_by_asg_zone: dict
     if len(groups) > 0:
         response = autoscaling.describe_auto_scaling_groups(AutoScalingGroupNames=groups)
         for asg in response['AutoScalingGroups']:
-            if 'Tags' in asg.keys() and len(asg['Tags']) > 0:
+            if 'Tags' in asg and asg['Tags']:
                 buffer_info = {}
                 for asg_tag in asg['Tags']:
                     tag_key = asg_tag['Key']
-                    if tag_key in ASG_ALLOWED_TAGS.keys():
+                    if tag_key in ASG_ALLOWED_TAGS:
                         buffer_info[ASG_ALLOWED_TAGS[tag_key]] = int(asg_tag['Value'])
 
-                if len(buffer_info.keys()) > 0:
+                if buffer_info.keys():
                     # Fill the missing buffer resource with global
                     if 'nodes' not in buffer_info.keys():
                         buffer_info['nodes'] = buffer_spare_nodes
