@@ -46,6 +46,12 @@ DESCRIBE_AUTO_SCALING_INSTANCES_LIMIT = 50
 
 logger = logging.getLogger('autoscaler')
 
+ASG_ALLOWED_TAGS = {
+    'kube-aws-autoscaler:buffer-memory-percentage': 'memory',
+    'kube-aws-autoscaler:buffer-cpu-percentage': 'cpu',
+    'kube-aws-autoscaler:buffer-pods-percentage': 'pods',
+    'kube-aws-autoscaler:buffer-spare-nodes': 'nodes'
+}
 
 STATS = {}
 
@@ -231,8 +237,42 @@ def slow_down_downscale(asg_sizes: dict, nodes_by_asg_zone: dict, scale_down_ste
     return asg_sizes
 
 
+def calculate_buffer_per_auto_scaling_group(autoscaling, nodes_by_asg_zone: dict,
+                                            buffer_percentage: dict, buffer_spare_nodes: int=0):
+    buffer_per_asg = {}
+
+    groups = []
+    for key in nodes_by_asg_zone:
+        asg_name, zone = key
+        groups.append(asg_name)
+
+    if len(groups) > 0:
+        response = autoscaling.describe_auto_scaling_groups(AutoScalingGroupNames=groups)
+        for asg in response['AutoScalingGroups']:
+            if 'Tags' in asg and asg['Tags']:
+                buffer_info = {}
+                for asg_tag in asg['Tags']:
+                    tag_key = asg_tag['Key']
+                    if tag_key in ASG_ALLOWED_TAGS:
+                        buffer_info[ASG_ALLOWED_TAGS[tag_key]] = int(asg_tag['Value'])
+
+                if buffer_info:
+                    # Fill the missing buffer resource with global
+                    if 'nodes' not in buffer_info.keys():
+                        buffer_info['nodes'] = buffer_spare_nodes
+                    for buffer_resource in RESOURCES:
+                        if buffer_resource not in buffer_info:
+                            buffer_info[buffer_resource] = buffer_percentage[buffer_resource]
+
+                    buffer_per_asg[asg['AutoScalingGroupName']] = buffer_info
+            else:
+                logger.info('No kube autoscaling tags configured for ASG = {}'.format(asg['AutoScalingGroupName']))
+
+    return buffer_per_asg
+
+
 def calculate_required_auto_scaling_group_sizes(nodes_by_asg_zone: dict, usage_by_asg_zone: dict,
-                                                buffer_percentage: dict, buffer_fixed: dict,
+                                                buffer_per_asg: dict, buffer_percentage: dict, buffer_fixed: dict,
                                                 buffer_spare_nodes: int=0, disable_scale_down: bool=False):
     asg_size = collections.defaultdict(int)
 
@@ -246,7 +286,15 @@ def calculate_required_auto_scaling_group_sizes(nodes_by_asg_zone: dict, usage_b
             # add requested resources from unassigned/pending pods
             for resource, val in pending.items():
                 requested[resource] += val
-        requested_with_buffer = apply_buffer(requested, buffer_percentage, buffer_fixed)
+
+        if asg_name in buffer_per_asg.keys():
+            logger.info('Using asg specific buffer config {} for {}'.format(buffer_per_asg[asg_name], asg_name))
+            requested_with_buffer = apply_buffer(requested, buffer_per_asg[asg_name], buffer_fixed)
+            spare_nodes = buffer_per_asg[asg_name]['nodes']
+        else:
+            requested_with_buffer = apply_buffer(requested, buffer_percentage, buffer_fixed)
+            spare_nodes = buffer_spare_nodes
+
         weakest_node = find_weakest_node(nodes)
         required_nodes = 0
         allocatable = {resource: 0 for resource in RESOURCES}
@@ -262,7 +310,7 @@ def calculate_required_auto_scaling_group_sizes(nodes_by_asg_zone: dict, usage_b
                 logger.info('Node {} is marked as unschedulable, compensating.'.format(node['name']))
                 required_nodes += 1
 
-        required_nodes += buffer_spare_nodes
+        required_nodes += spare_nodes
 
         overprovisioned = {resource: 0 for resource in RESOURCES}
         for resource, value in allocatable.items():
@@ -395,14 +443,19 @@ def autoscale(buffer_percentage: dict, buffer_fixed: dict,
     autoscaling = boto3.client('autoscaling', region)
     nodes_by_asg_zone = get_nodes_by_asg_zone(autoscaling, all_nodes)
 
+    buffer_per_asg = calculate_buffer_per_auto_scaling_group(autoscaling, nodes_by_asg_zone,
+                                                             buffer_percentage, buffer_spare_nodes)
+
     # we only consider nodes found in an ASG (old "ghost" nodes returned from Kubernetes API are ignored)
     nodes_by_name = get_nodes_by_name(itertools.chain(*nodes_by_asg_zone.values()))
 
     pods = pykube.Pod.objects(api, namespace=pykube.all)
 
     usage_by_asg_zone = calculate_usage_by_asg_zone(pods, nodes_by_name)
-    asg_size = calculate_required_auto_scaling_group_sizes(nodes_by_asg_zone, usage_by_asg_zone, buffer_percentage, buffer_fixed,
-                                                           buffer_spare_nodes=buffer_spare_nodes, disable_scale_down=disable_scale_down)
+    asg_size = calculate_required_auto_scaling_group_sizes(nodes_by_asg_zone, usage_by_asg_zone,
+                                                           buffer_per_asg, buffer_percentage, buffer_fixed,
+                                                           buffer_spare_nodes=buffer_spare_nodes,
+                                                           disable_scale_down=disable_scale_down)
     asg_size = slow_down_downscale(asg_size, nodes_by_asg_zone, scale_down_step_fixed, scale_down_step_percentage)
     ready_nodes_by_asg = get_ready_nodes_by_asg(nodes_by_asg_zone)
     resize_auto_scaling_groups(autoscaling, asg_size, ready_nodes_by_asg, dry_run)

@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 import pytest
 from kube_aws_autoscaler.main import (apply_buffer, autoscale,
                                       calculate_required_auto_scaling_group_sizes,
+                                      calculate_buffer_per_auto_scaling_group,
                                       calculate_usage_by_asg_zone, chunks,
                                       format_resource, get_kube_api, get_nodes,
                                       get_nodes_by_asg_zone, is_node_ready,
@@ -76,32 +77,32 @@ def test_calculate_usage_by_asg_zone():
 
 
 def test_calculate_required_auto_scaling_group_sizes():
-    assert calculate_required_auto_scaling_group_sizes({}, {}, {}, {}) == {}
+    assert calculate_required_auto_scaling_group_sizes({}, {}, {}, {}, {}) == {}
     node = {'allocatable': {'cpu': 1, 'memory': 1, 'pods': 1}, 'unschedulable': False, 'master': False}
-    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {}, {}, {}) == {'a1': 0}
-    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {('a1', 'z1'): {'cpu': 1, 'memory': 1, 'pods': 1}}, {}, {}) == {'a1': 1}
-    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {('unknown', 'unknown'): {'cpu': 1, 'memory': 1, 'pods': 1}}, {}, {}) == {'a1': 1}
-    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {}, {}, {}, buffer_spare_nodes=2) == {'a1': 2}
+    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {}, {}, {}, {}) == {'a1': 0}
+    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {('a1', 'z1'): {'cpu': 1, 'memory': 1, 'pods': 1}}, {}, {}, {}) == {'a1': 1}
+    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {('unknown', 'unknown'): {'cpu': 1, 'memory': 1, 'pods': 1}}, {}, {}, {}) == {'a1': 1}
+    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {}, {}, {}, {}, buffer_spare_nodes=2) == {'a1': 2}
 
 
 def test_calculate_required_auto_scaling_group_sizes_no_scaledown():
     nodes = [{'allocatable': {'cpu': 1, 'memory': 1, 'pods': 1}, 'unschedulable': False, 'master': False},
              {'allocatable': {'cpu': 1, 'memory': 1, 'pods': 1}, 'unschedulable': False, 'master': False}]
-    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): nodes}, {}, {}, {}) == {'a1': 0}
-    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): nodes}, {}, {}, {}, disable_scale_down=True) == {'a1': 2}
+    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): nodes}, {}, {}, {}, {}) == {'a1': 0}
+    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): nodes}, {}, {}, {}, {}, disable_scale_down=True) == {'a1': 2}
 
 
 def test_calculate_required_auto_scaling_group_sizes_cordon():
     node = {'name': 'mynode', 'allocatable': {'cpu': 1, 'memory': 1, 'pods': 1}, 'unschedulable': True, 'master': False, 'asg_lifecycle_state': 'InService'}
-    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {}, {}, {}) == {'a1': 1}
-    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {('a1', 'z1'): {'cpu': 1, 'memory': 1, 'pods': 1}}, {}, {}) == {'a1': 2}
+    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {}, {}, {}, {}) == {'a1': 1}
+    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {('a1', 'z1'): {'cpu': 1, 'memory': 1, 'pods': 1}}, {}, {}, {}) == {'a1': 2}
 
 
 def test_calculate_required_auto_scaling_group_sizes_unschedulable_terminating():
     node = {'name': 'mynode', 'allocatable': {'cpu': 1, 'memory': 1, 'pods': 1}, 'unschedulable': True, 'master': False, 'asg_lifecycle_state': 'Terminating'}
     # do not compensate if the instance is terminating.. (it will probably be replaced by ASG)
-    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {}, {}, {}) == {'a1': 0}
-    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {('a1', 'z1'): {'cpu': 1, 'memory': 1, 'pods': 1}}, {}, {}) == {'a1': 1}
+    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {}, {}, {}, {}) == {'a1': 0}
+    assert calculate_required_auto_scaling_group_sizes({('a1', 'z1'): [node]}, {('a1', 'z1'): {'cpu': 1, 'memory': 1, 'pods': 1}}, {}, {}, {}) == {'a1': 1}
 
 
 def test_get_nodes_by_asg_zone():
@@ -151,7 +152,8 @@ def test_resize_auto_scaling_groups_downscale():
             'AutoScalingGroupName': 'asg1',
             'DesiredCapacity': 2,
             'MinSize': 1,
-            'MaxSize': 10
+            'MaxSize': 10,
+            'Tags': []
         }]
     }
     asg_size = {'asg1': 1}
@@ -167,7 +169,8 @@ def test_resize_auto_scaling_groups_nochange():
             'AutoScalingGroupName': 'asg1',
             'DesiredCapacity': 2,
             'MinSize': 1,
-            'MaxSize': 10
+            'MaxSize': 10,
+            'Tags': []
         }]
     }
     asg_size = {'asg1': 2}
@@ -285,7 +288,7 @@ def test_get_nodes(monkeypatch):
         'beta.kubernetes.io/instance-type': 'x1.mega'
     }
     node.obj = {
-        'status': {'allocatable': {'cpu': '2', 'memory': '16Gi', 'pods': '10'}},
+        'status': {'allocatable': {'cpu': '2', 'memory': '16Gi', 'pods': '10'}, 'nodeInfo': {'kubeletVersion': '1.9'}},
         'spec': {'externalID': 'i-123'}
     }
 
@@ -298,7 +301,7 @@ def test_get_nodes(monkeypatch):
         'master': 'true'
     }
     master.obj = {
-        'status': {'allocatable': {'cpu': '2', 'memory': '16Gi', 'pods': '10'}},
+        'status': {'allocatable': {'cpu': '2', 'memory': '16Gi', 'pods': '10'}, 'nodeInfo': {'kubeletVersion': '1.9'}},
         'spec': {'externalID': 'i-456'}
     }
 
@@ -513,6 +516,7 @@ def test_start_health_endpoint():
     response = flask.get('/healthz')
     assert response.status_code == 503
 
+
 def test_endpoint_healthy_state(monkeypatch):
     kube_aws_autoscaler.main.Healthy = False
     autoscale = MagicMock()
@@ -520,3 +524,309 @@ def test_endpoint_healthy_state(monkeypatch):
     monkeypatch.setattr('sys.argv', ['foo', '--once', '--dry-run'])
     main()
     assert kube_aws_autoscaler.main.Healthy == True
+
+
+def test_calculate_buffer_per_auto_scaling_group_with_no_asg_tag():
+    autoscaling = MagicMock()
+    autoscaling.describe_auto_scaling_groups.return_value = {
+        'AutoScalingGroups': [{
+            'AutoScalingGroupName': 'asg1',
+            'DesiredCapacity': 1,
+            'MinSize': 1,
+            'MaxSize': 10,
+            'Tags': []
+        }]
+    }
+    buffer_per_asg = calculate_buffer_per_auto_scaling_group(autoscaling, {('asg1', 'z1'): {'cpu': 1/1000, 'memory': 52428800, 'pods': 1}}, {}, 0)
+    assert buffer_per_asg == {}
+
+
+def test_calculate_buffer_per_auto_scaling_group_with_cpu_override():
+    autoscaling = MagicMock()
+    autoscaling.describe_auto_scaling_groups.return_value = {
+        'AutoScalingGroups': [{
+            'AutoScalingGroupName': 'asg1',
+            'DesiredCapacity': 1,
+            'MinSize': 1,
+            'MaxSize': 10,
+            'Tags': [
+                {
+                    'Key': 'kube-aws-autoscaler:buffer-cpu-percentage',
+                    'Value': '5',
+                },
+            ]
+        }]
+    }
+
+    buffer_percentage = {
+        'memory': 10,
+        'cpu': 10,
+        'pods': 10
+    }
+    buffer_per_asg = calculate_buffer_per_auto_scaling_group(autoscaling,
+                                                             {('asg1', 'z1'): {'cpu': 1/1000, 'memory': 52428800, 'pods': 1}},
+                                                             buffer_percentage, 1)
+    assert buffer_per_asg == {'asg1': {
+        'cpu': 5,  # expected the cpu to match the tag value
+        'memory': 10,
+        'pods': 10,
+        'nodes': 1
+    }}
+
+
+def test_calculate_buffer_per_auto_scaling_group_with_memory_override():
+    autoscaling = MagicMock()
+    autoscaling.describe_auto_scaling_groups.return_value = {
+        'AutoScalingGroups': [{
+            'AutoScalingGroupName': 'asg1',
+            'DesiredCapacity': 1,
+            'MinSize': 1,
+            'MaxSize': 10,
+            'Tags': [
+                {
+                    'Key': 'kube-aws-autoscaler:buffer-memory-percentage',
+                    'Value': '25',
+                },
+            ]
+        }]
+    }
+
+    buffer_percentage = {
+        'memory': 10,
+        'cpu': 10,
+        'pods': 10
+    }
+    buffer_per_asg = calculate_buffer_per_auto_scaling_group(autoscaling,
+                                                             {('asg1', 'z1'): {'cpu': 1/1000, 'memory': 52428800, 'pods': 1}},
+                                                             buffer_percentage, 1)
+    assert buffer_per_asg == {'asg1': {
+        'cpu': 10,
+        'memory': 25,  # expected the memory to match the tag value
+        'pods': 10,
+        'nodes': 1
+    }}
+
+
+def test_calculate_buffer_per_auto_scaling_group_with_pods_override():
+    autoscaling = MagicMock()
+    autoscaling.describe_auto_scaling_groups.return_value = {
+        'AutoScalingGroups': [{
+            'AutoScalingGroupName': 'asg1',
+            'DesiredCapacity': 1,
+            'MinSize': 1,
+            'MaxSize': 10,
+            'Tags': [
+                {
+                    'Key': 'kube-aws-autoscaler:buffer-pods-percentage',
+                    'Value': '50',
+                },
+            ]
+        }]
+    }
+
+    buffer_percentage = {
+        'memory': 10,
+        'cpu': 10,
+        'pods': 10
+    }
+    buffer_per_asg = calculate_buffer_per_auto_scaling_group(autoscaling,
+                                                             {('asg1', 'z1'): {'cpu': 1/1000, 'memory': 52428800, 'pods': 1}},
+                                                             buffer_percentage, 1)
+    assert buffer_per_asg == {'asg1': {
+        'cpu': 10,
+        'memory': 10,
+        'pods': 50,  # expected the pods to match the tag value
+        'nodes': 1
+    }}
+
+
+def test_calculate_buffer_per_auto_scaling_group_with_nodes_override():
+    autoscaling = MagicMock()
+    autoscaling.describe_auto_scaling_groups.return_value = {
+        'AutoScalingGroups': [{
+            'AutoScalingGroupName': 'asg1',
+            'DesiredCapacity': 1,
+            'MinSize': 1,
+            'MaxSize': 10,
+            'Tags': [
+                {
+                    'Key': 'kube-aws-autoscaler:buffer-spare-nodes',
+                    'Value': '3',
+                },
+            ]
+        }]
+    }
+
+    buffer_percentage = {
+        'memory': 10,
+        'cpu': 10,
+        'pods': 10
+    }
+    buffer_per_asg = calculate_buffer_per_auto_scaling_group(autoscaling,
+                                                             {('asg1', 'z1'): {'cpu': 1/1000, 'memory': 52428800, 'pods': 1}},
+                                                             buffer_percentage, 1)
+    assert buffer_per_asg == {'asg1': {
+        'cpu': 10,
+        'memory': 10,
+        'pods': 10,
+        'nodes': 3  # expected the nodes to match the tag value
+    }}
+
+
+def test_calculate_buffer_per_auto_scaling_group_with_all_override():
+    autoscaling = MagicMock()
+    autoscaling.describe_auto_scaling_groups.return_value = {
+        'AutoScalingGroups': [{
+            'AutoScalingGroupName': 'asg1',
+            'DesiredCapacity': 1,
+            'MinSize': 1,
+            'MaxSize': 10,
+            'Tags': [
+                {
+                    'Key': 'kube-aws-autoscaler:buffer-cpu-percentage',
+                    'Value': '0',
+                },
+                {
+                    'Key': 'kube-aws-autoscaler:buffer-memory-percentage',
+                    'Value': '5',
+                },
+                {
+                    'Key': 'kube-aws-autoscaler:buffer-pods-percentage',
+                    'Value': '10',
+                },
+                {
+                    'Key': 'kube-aws-autoscaler:buffer-spare-nodes',
+                    'Value': '2',
+                },
+            ]
+        }]
+    }
+
+    buffer_percentage = {
+        'memory': 10,
+        'cpu': 10,
+        'pods': 10
+    }
+    buffer_per_asg = calculate_buffer_per_auto_scaling_group(autoscaling,
+                                                             {('asg1', 'z1'): {'cpu': 1/1000, 'memory': 52428800, 'pods': 1}},
+                                                             buffer_percentage, 1)
+    assert buffer_per_asg == {'asg1': {
+        'cpu': 0,
+        'memory': 5,
+        'pods': 10,
+        'nodes': 2  # expected the nodes to match the tag value
+    }}
+
+
+def test_calculate_buffer_per_auto_scaling_group_with_multiple_groups_and_partial_overrides():
+    autoscaling = MagicMock()
+    autoscaling.describe_auto_scaling_groups.return_value = {
+        'AutoScalingGroups': [
+            {
+                'AutoScalingGroupName': 'asg1',
+                'DesiredCapacity': 1,
+                'MinSize': 1,
+                'MaxSize': 10,
+                'Tags': [
+                    {
+                        'Key': 'kube-aws-autoscaler:buffer-cpu-percentage',
+                        'Value': '25',
+                    },
+                    {
+                        'Key': 'kube-aws-autoscaler:buffer-memory-percentage',
+                        'Value': '25',
+                    },
+                    {
+                        'Key': 'kube-aws-autoscaler:buffer-pods-percentage',
+                        'Value': '25',
+                    },
+                    {
+                        'Key': 'kube-aws-autoscaler:buffer-spare-nodes',
+                        'Value': '2',
+                    },
+                ]
+            },
+            {
+                'AutoScalingGroupName': 'asg2',
+                'DesiredCapacity': 1,
+                'MinSize': 1,
+                'MaxSize': 10,
+                'Tags': [
+                    {
+                        'Key': 'kube-aws-autoscaler:buffer-cpu-percentage',
+                        'Value': '20',
+                    },
+                    {
+                        'Key': 'kube-aws-autoscaler:buffer-spare-nodes',
+                        'Value': '5',
+                    },
+                ]
+            },
+            {
+                'AutoScalingGroupName': 'asg3',
+                'DesiredCapacity': 1,
+                'MinSize': 1,
+                'MaxSize': 10,
+                'Tags': [
+                ]
+            }]
+    }
+
+    buffer_percentage = {
+        'memory': 10,
+        'cpu': 10,
+        'pods': 10
+    }
+    buffer_per_asg = calculate_buffer_per_auto_scaling_group(autoscaling,
+                                                             {('asg1', 'z1'): {'cpu': 1/1000, 'memory': 52428800, 'pods': 1}},
+                                                             buffer_percentage, 1)
+    assert buffer_per_asg == {
+        'asg1': {'cpu': 25, 'memory': 25, 'pods': 25, 'nodes': 2},
+        'asg2': {'cpu': 20, 'memory': 10, 'pods': 10, 'nodes': 5}
+    }
+
+
+def test_calculate_required_auto_scaling_group_sizes_with_asg_overrides_scaleup_no_spare_node():
+    node = {'allocatable': {'cpu': 1, 'memory': 1, 'pods': 1}, 'unschedulable': False, 'master': False}
+    buffer_per_asg = {
+        'asg1': {'cpu': 25, 'memory': 25, 'pods': 10, 'nodes': 0}
+    }
+    result = calculate_required_auto_scaling_group_sizes({('asg1', 'z1'): [node]},
+                                                         {('asg1', 'z1'): {'cpu': 1, 'memory': 1, 'pods': 1}},
+                                                         buffer_per_asg, {}, {})
+    assert result == {'asg1': 2}
+
+
+def test_calculate_required_auto_scaling_group_sizes_with_asg_overrides_scaleup_with_spare_node():
+    node = {'allocatable': {'cpu': 1, 'memory': 1, 'pods': 1}, 'unschedulable': False, 'master': False}
+    buffer_per_asg = {
+        'asg1': {'cpu': 25, 'memory': 25, 'pods': 10, 'nodes': 1}
+    }
+    result = calculate_required_auto_scaling_group_sizes({('asg1', 'z1'): [node]},
+                                                         {('asg1', 'z1'): {'cpu': 1, 'memory': 1, 'pods': 1}},
+                                                         buffer_per_asg, {}, {})
+    assert result == {'asg1': 3}
+
+
+def test_calculate_required_auto_scaling_group_sizes_with_asg_overrides_no_scale():
+    node = {'allocatable': {'cpu': 1, 'memory': 1, 'pods': 10}, 'unschedulable': False, 'master': False}
+    buffer_per_asg = {
+        'asg1': {'cpu': 5, 'memory': 5, 'pods': 10, 'nodes': 0}
+    }
+    result = calculate_required_auto_scaling_group_sizes({('asg1', 'z1'): [node]},
+                                                         {('asg1', 'z1'): {'cpu': 0.5, 'memory': 0.5, 'pods': 1}},
+                                                         buffer_per_asg, {}, {})
+    assert result == {'asg1': 1}
+
+
+def test_calculate_required_auto_scaling_group_sizes_with_asg_overrides_scale_down():
+    node1 = {'allocatable': {'cpu': 1, 'memory': 1, 'pods': 10}, 'unschedulable': False, 'master': False}
+    node2 = {'allocatable': {'cpu': 1, 'memory': 1, 'pods': 10}, 'unschedulable': False, 'master': False}
+    buffer_per_asg = {
+        'asg1': {'cpu': 15, 'memory': 15, 'pods': 10, 'nodes': 0}
+    }
+    result = calculate_required_auto_scaling_group_sizes({('asg1', 'z1'): [node1, node2]},
+                                                         {('asg1', 'z1'): {'cpu': 0.5, 'memory': 0.5, 'pods': 1}},
+                                                         buffer_per_asg, {}, {})
+    assert result == {'asg1': 1}
+

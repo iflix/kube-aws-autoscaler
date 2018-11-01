@@ -10,3 +10,5 @@ scm-source.json
 .coverage
 *.bak
 htmlcov/
+venv/
+.idea/

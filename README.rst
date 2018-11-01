@@ -86,8 +86,12 @@ See below for optional configuration parameters.
 
 Configuration
 =============
+There are two types of configuration, i.e. global and per autoscaling group.
 
-The following command line options are supported:
+Global
+--------
+The global configuration overrides the hardcoded defaults and applies to all the worker pools autoscaling groups. The global config parameters
+can be configured as environment variables or passed as argument to the entrypoint. The following command line options are supported:
 
 ``--buffer-cpu-percentage``
     Extra CPU requests % to add to calculation, defaults to 10%.
@@ -114,6 +118,20 @@ The following command line options are supported:
 ``--scale-down-step-percentage``
     Scale down step in terms of node percentage (1.0 is 100%), defaults to 0%
 
+Per Autoscaling group
+--------
+The config params per ASG allows fine-tuning the scaling policy per worker pool. The config params need to be configured as tags to the
+autoscaling group. If the ASG doesn't have the tags, then the autoscaler will use the globally configured params. If the ASG has configured
+only specific parameters, then the rest will be inherited from the global configuration. Following parameters are supposed:
+
+``kube-aws-autoscaler:buffer-cpu-percentage``
+  Extra CPU requests % to add to calculation.
+``kube-aws-autoscaler:buffer-memory-percentage``
+  Extra memory requests % to add to calculation.
+``kube-aws-autoscaler:buffer-pods-percentage``
+  Extra pods requests % to add to calculation.
+``kube-aws-autoscaler:buffer-spare-nodes``
+  Number of extra "spare" nodes to provision per ASG/AZ.
 
 .. _"official" cluster-autoscaler: https://github.com/kubernetes/autoscaler
 .. _allocatable capacity: https://github.com/kubernetes/community/blob/master/contributors/design-proposals/node/node-allocatable.md
